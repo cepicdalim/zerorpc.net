@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 using NetMQ;
 using System.Collections.Concurrent;
+using System.Threading.Tasks;
 
 public class ZeroRpcClient<T> : DispatchProxy, IClient<T> where T : class
 {
@@ -40,12 +41,18 @@ public class ZeroRpcClient<T> : DispatchProxy, IClient<T> where T : class
 
         client.SendRequest(request);
 
-        if (targetMethod.ReturnType != typeof(void) && targetMethod.ReturnType != typeof(Task))
+        if (targetMethod.ReturnType == typeof(void))
         {
-            return HandleResponse(client, request);
+            return null;
         }
 
-        return null;
+        if (targetMethod.ReturnType == typeof(Task))
+        {
+            return Task.CompletedTask;
+        }
+
+
+        return HandleResponse(client, request);
     }
 
     private object? HandleResponse(NetMQSocket client, RpcRequest request)

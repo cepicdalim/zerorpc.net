@@ -41,6 +41,9 @@ public class ZeroRpcServer : IServer
                 if (attribute != null)
                 {
                     var methodKey = $"{type.FullName}.{attribute.Name}".TrimStart('.');
+#if DEBUG
+                    Console.WriteLine($"Registering method: {methodKey}");
+#endif
                     _services.TryAdd(methodKey, method);
                 }
             }
