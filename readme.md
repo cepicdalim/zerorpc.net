@@ -197,7 +197,7 @@ ZeroRPC is licensed under the MIT License. See the [LICENSE](LICENSE) file for d
 ## Example Repository
 
 Check out the example repository for a full implementation of ZeroRPC:
-[ZeroRPC Example](https://github.com/cepicdalim/zerorpc.net/examples)
+[ZeroRPC Example](https://github.com/cepicdalim/zerorpc.net/tree/main/examples/)
 
 ---
 
