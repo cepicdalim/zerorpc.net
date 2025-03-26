@@ -13,7 +13,7 @@ var remoteExampleService = serviceProvider.GetRequiredService<IExampleService>()
 
 #region Basic Scenarios
 
-await remoteExampleService.FireAndForgetAsync(3);
+_ = remoteExampleService.FireAndForgetAsync(3);
 
 var simpleSync = remoteExampleService.WaitAndReturn(0);
 Console.WriteLine($"Simple sync: {simpleSync}");
