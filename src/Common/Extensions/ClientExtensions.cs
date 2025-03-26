@@ -39,6 +39,21 @@ public static class ClientExtensions
     /// <param name="request"></param>
     public static void SendRequest(this NetMQSocket client, RpcRequest request)
     {
+        if (request == null)
+        {
+            throw new ArgumentNullException(nameof(request));
+        }
+
+        if (request.FullPath == null)
+        {
+            throw new ArgumentNullException(nameof(request.FullPath));
+        }
+
+        if (request.SerializedArgs == null)
+        {
+            throw new ArgumentNullException(nameof(request.SerializedArgs));
+        }
+
         var message = new NetMQMessage();
         message.Append(request.CorrelationId);
         message.Append(request.FullPath);

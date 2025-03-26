@@ -5,6 +5,8 @@ using NetMQ;
 using ZeroRPC.NET.Common.Types.Exceptions;
 using ZeroRPC.NET.Core;
 
+
+namespace ZeroRPC.NET.Common.Extensions;
 /// <summary>
 /// Extension methods for the server.
 /// </summary>

@@ -9,6 +9,7 @@ using ZeroRPC.NET.Common.Constants;
 using ZeroRPC.NET.Common.Types;
 using ZeroRPC.NET.Common.Types.Exceptions;
 using ZeroRPC.NET.Factory;
+using ZeroRPC.NET.Common.Extensions;
 
 namespace ZeroRPC.NET.Core;
 
@@ -76,11 +77,11 @@ public class ZeroRpcServer : IServer
         while (!cancellationToken.IsCancellationRequested)
         {
             var incomingMessage = await routerSocket.ReceiveMultipartMessageAsync(cancellationToken: cancellationToken);
-            ProcessRequest(routerSocket, incomingMessage);
+            _ = ProcessRequest(routerSocket, incomingMessage);
         }
     }
 
-    private void ProcessRequest(NetMQSocket routerSocket, NetMQMessage incomingMessage)
+    private async Task ProcessRequest(NetMQSocket routerSocket, NetMQMessage incomingMessage)
     {
         var correlationId = incomingMessage[ServerFrameIndex.CorrelationId].ConvertToString();
         var clientIdentity = incomingMessage[ServerFrameIndex.Identity].ToByteArray();
@@ -106,10 +107,21 @@ public class ZeroRpcServer : IServer
 
             var result = methodInfo.Invoke(serviceInstance, args);
 
-            if (methodInfo.ReturnType != typeof(void) && methodInfo.ReturnType != typeof(Task))
+            if (methodInfo.ReturnType == typeof(void) || methodInfo.ReturnType == typeof(Task))
             {
-                routerSocket.SendOkResponse(correlationId, clientIdentity, JsonSerializer.Serialize(result));
+                return;
             }
+
+            if (result is Task task)
+            {
+                await task;
+                if (task.GetType().IsGenericType)
+                {
+                    var property = task.GetType().GetProperty("Result");
+                    result = property?.GetValue(task);
+                }
+            }
+            routerSocket.SendOkResponse(correlationId, clientIdentity, JsonSerializer.Serialize(result));
         }
         catch (TargetInvocationException ex)
         {
@@ -125,14 +137,14 @@ public class ZeroRpcServer : IServer
     {
         var parameterTypes = methodInfo.GetParameters().Select(p => p.ParameterType).ToArray();
         var argsJson = incomingMessage[ServerFrameIndex.Params].ConvertToString();
-        var args = JsonSerializer.Deserialize<object[]>(argsJson) ?? Array.Empty<object>();
+        var args = JsonSerializer.Deserialize<object[]>(argsJson) ?? [];
 
         if (args.Length != parameterTypes.Length)
         {
             throw new ZeroRpcException($"Parameter count mismatch for method '{methodInfo.Name}'.");
         }
 
-        return args.Select((arg, index) =>
+        return [.. args.Select((arg, index) =>
         {
             if (arg is JsonElement jsonElement)
             {
@@ -140,6 +152,6 @@ public class ZeroRpcServer : IServer
             }
 
             return Convert.ChangeType(arg, parameterTypes[index]);
-        }).ToArray();
+        })];
     }
 }

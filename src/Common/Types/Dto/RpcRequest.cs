@@ -1,3 +1,5 @@
+using System.Threading.Tasks;
+
 namespace ZeroRPC.NET.Common.Types.Dto;
 
 /// <summary>
@@ -13,36 +15,30 @@ public record RpcRequest
     /// <summary>
     /// Gets the full path of the method to be invoked.
     /// </summary>
-    public string FullPath { get; }
+    public string? FullPath { get; set; }
 
     /// <summary>
     /// Gets the serialized arguments for the method to be invoked.
     /// </summary>
-    public string SerializedArgs { get; }
+    public string? SerializedArgs { get; set; }
 
     /// <summary>
     /// Gets the return type of the method to be invoked.
     /// </summary>
-    public Type? ReturnType { get; }
+    public Type? ReturnType { get; set; }
 
     /// <summary>
     /// Gets the timeout for the request.
     /// </summary>
     public TimeSpan Timeout { get; set; }
 
+    /// <summary>
+    /// Gets the host for the request.
+    /// </summary>
+    public string? Host { get; set; }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="RpcRequest"/> class.
+    /// Gets the task completion source for the request.
     /// </summary>
-    /// <param name="fullPath"></param>
-    /// <param name="serializedArgs"></param>
-    /// <param name="returnType"></param>
-    /// <param name="timeout"></param>
-    public RpcRequest(string fullPath, string serializedArgs, Type? returnType, TimeSpan timeout)
-    {
-        FullPath = fullPath;
-        SerializedArgs = serializedArgs;
-        ReturnType = returnType;
-        Timeout = timeout;
-    }
+    public TaskCompletionSource<object?> TaskCompletionSource { get; set; } = new TaskCompletionSource<object?>();
 }

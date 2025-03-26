@@ -163,6 +163,13 @@ client.SendMessage("Hello, server!");
 
 ---
 
+## Example Project
+
+Run both ZeroRPC.Client and ZeroRPC.Server inside examples folder projects using:
+```bash
+dotnet run
+```
+
 ## How It Works
 
 ZeroRPC uses the ZeroMQ Dealer-Router pattern for communication:
@@ -174,6 +181,18 @@ ZeroRPC uses the ZeroMQ Dealer-Router pattern for communication:
 5. **Fire & Forget**: Do not wait for response for the methods that has return type of "void" or "Task"
 6. **Request TTL**: Server doesn't process incoming requests if the timeout reached (client not listening for respnose anymore)
 ---
+
+## Benchmark (via BenchmarkDotNet v0.14.0)
+**Apple M1 Pro, 1 CPU, 10 logical and 10 physical cores**
+
+| **Method**                  | **Mean**      | **Error**    | **StdDev**    | **Median**    | **Gen0**   | **Allocated** |
+|------------------------ |----------:|---------:|----------:|----------:|-------:|----------:|
+| WaitAndReturn           | 302.21 us | 5.758 us | 13.906 us | 296.31 us | 0.4883 |    3.1 KB |
+| WaitAndReturnAsync      | 302.85 us | 6.002 us | 12.790 us | 297.97 us | 0.4883 |   3.86 KB |
+| MultipleParameter       | 305.07 us | 5.885 us | 11.888 us | 303.22 us | 0.4883 |    3.2 KB |
+| WaitAndReturnModelAsync | 300.77 us | 6.006 us |  8.614 us | 298.94 us | 0.4883 |      4 KB |
+| FireAndForgetAsync      |  77.88 us | 1.421 us |  1.187 us |  77.59 us | 0.2441 |   2.21 KB |
+Run time: 00:03:03 (183.33 sec), executed benchmarks: 5
 
 ## Contributing
 
