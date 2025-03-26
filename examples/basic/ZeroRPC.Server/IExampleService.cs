@@ -1,4 +1,6 @@
 
+using ZeroRPC.NET.Common.Attributes;
+
 namespace ZeroRPC.Server
 {
     public interface IExampleService

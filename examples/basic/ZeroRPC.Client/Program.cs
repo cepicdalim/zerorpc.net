@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using ZeroRPC.Client;
+using ZeroRPC.NET.Common.Extensions;
 
 var services = new ServiceCollection();
 

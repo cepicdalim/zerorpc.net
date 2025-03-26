@@ -1,25 +1,45 @@
-using NetMQ;
+using System.Collections.Concurrent;
+using System.Linq;
 using System.Reflection;
 using System.Text.Json;
-using System.Collections.Concurrent;
+using System.Threading.Tasks;
+using NetMQ;
+using ZeroRPC.NET.Common.Attributes;
+using ZeroRPC.NET.Common.Constants;
+using ZeroRPC.NET.Common.Types;
+using ZeroRPC.NET.Common.Types.Exceptions;
+using ZeroRPC.NET.Factory;
 
+namespace ZeroRPC.NET.Core;
+
+/// <summary>
+/// ZeroRPC server implementation.
+/// </summary>
 public class ZeroRpcServer : IServer
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ConcurrentDictionary<string, MethodInfo> _services = new();
 
-    private static List<string> _clients = new();
-
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ZeroRpcServer"/> class.
+    /// </summary>
+    /// <param name="serviceProvider"></param>
+    /// <exception cref="ArgumentNullException"></exception>
     public ZeroRpcServer(IServiceProvider serviceProvider)
     {
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
     }
 
+    /// <summary>
+    /// Register services to be exposed via ZeroRPC.
+    /// </summary>
+    /// <param name="port"></param>
+    /// <param name="cancellationToken"></param>
     public void RegisterServices(int port, CancellationToken cancellationToken = default)
     {
         CollectRemoteServices();
         var runtime = new NetMQRuntime();
-        runtime.Run(StartServer(port, cancellationToken));
+        runtime.Run(cancellationToken, StartServer(port, cancellationToken));
     }
 
     private void CollectRemoteServices()
@@ -38,14 +58,13 @@ public class ZeroRpcServer : IServer
             foreach (var method in methods)
             {
                 var attribute = method.GetCustomAttribute<RemoteMethod>();
-                if (attribute != null)
-                {
-                    var methodKey = $"{type.FullName}.{attribute.Name}".TrimStart('.');
+                if (attribute == null) continue;
+
+                var methodKey = $"{type.FullName}.{attribute.Name}".TrimStart('.');
 #if DEBUG
-                    Console.WriteLine($"Registering method: {methodKey}");
+                Console.WriteLine($"Registering method: {methodKey}");
 #endif
-                    _services.TryAdd(methodKey, method);
-                }
+                _services.TryAdd(methodKey, method);
             }
         }
     }
@@ -66,7 +85,7 @@ public class ZeroRpcServer : IServer
         var correlationId = incomingMessage[ServerFrameIndex.CorrelationId].ConvertToString();
         var clientIdentity = incomingMessage[ServerFrameIndex.Identity].ToByteArray();
         var method = incomingMessage[ServerFrameIndex.Payload].ConvertToString();
-        var ttl = incomingMessage[ServerFrameIndex.TTL].ConvertToInt64();
+        var ttl = incomingMessage[ServerFrameIndex.Ttl].ConvertToInt64();
 
         if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > ttl)
         {
@@ -83,7 +102,7 @@ public class ZeroRpcServer : IServer
 
             var args = DeserializeArguments(incomingMessage, methodInfo);
             var serviceInstance = _serviceProvider.GetService(methodInfo.DeclaringType!)
-                ?? throw new ZeroRpcException($"Service for type '{methodInfo.DeclaringType!.Name}' not found.");
+                                  ?? throw new ZeroRpcException($"Service for type '{methodInfo.DeclaringType!.Name}' not found.");
 
             var result = methodInfo.Invoke(serviceInstance, args);
 
@@ -91,7 +110,6 @@ public class ZeroRpcServer : IServer
             {
                 routerSocket.SendOkResponse(correlationId, clientIdentity, JsonSerializer.Serialize(result));
             }
-
         }
         catch (TargetInvocationException ex)
         {
@@ -103,7 +121,7 @@ public class ZeroRpcServer : IServer
         }
     }
 
-    private object?[] DeserializeArguments(NetMQMessage incomingMessage, MethodInfo methodInfo)
+    private static object?[] DeserializeArguments(NetMQMessage incomingMessage, MethodInfo methodInfo)
     {
         var parameterTypes = methodInfo.GetParameters().Select(p => p.ParameterType).ToArray();
         var argsJson = incomingMessage[ServerFrameIndex.Params].ConvertToString();
@@ -120,6 +138,7 @@ public class ZeroRpcServer : IServer
             {
                 return JsonSerializer.Deserialize(jsonElement.GetRawText(), parameterTypes[index]);
             }
+
             return Convert.ChangeType(arg, parameterTypes[index]);
         }).ToArray();
     }

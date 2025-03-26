@@ -1,4 +1,5 @@
 ﻿using ZeroRPC.Advance.Client;
+using ZeroRPC.NET.Common.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 

@@ -1,6 +1,7 @@
 using NetMQ;
 using NetMQ.Sockets;
-using System.Text;
+
+namespace ZeroRPC.NET.Factory;
 
 internal static class DealerFactory
 {

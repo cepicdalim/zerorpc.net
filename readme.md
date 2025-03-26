@@ -10,7 +10,7 @@ This library offering lightweight, fast, and customizable Remote Procedure Call 
 
 - **Attribute-Based RPC**: Use `[RemoteMethod]`, `[RemoteService]`, and `[RemoteExecutionRule]` attributes to define remote methods and namespaces.
 - **ZeroMQ Dealer-Router Pattern**: Leverages ZeroMQ for high-performance, asynchronous messaging.
-- **Retry & Timeout Rules**: Configure timeout and retry logic for remote method calls.
+- **Timeout Rules**: Configure timeout and retry logic for remote method calls.
 - **Seamless Integration**: Easily integrate with .NET dependency injection for both clients and servers.
 - **Task and Void Support**: Automatically handles return types, including `void` and `Task`.
 
@@ -37,7 +37,7 @@ Use the `[RemoteService]` and `[RemoteMethod]` attributes to define your remote 
 public interface IMyService
 {
     [RemoteMethod("GetData")]
-    [RemoteExecutionRule(timeoutMillisecond: 5000, retryCount: 3)]
+    [RemoteExecutionRule(timeoutMillisecond: 5000)]
     string GetData(int id);
 
     [RemoteMethod("SendMessage")]
@@ -105,12 +105,12 @@ client.SendMessage("Hello, server!");
 
 ## Advanced Features
 
-### Retry Logic and Timeout
+### Timeout for Queries
 
 Use `[RemoteExecutionRule]` to configure retries and timeouts for remote method calls.
 
 ```csharp
-[RemoteExecutionRule(timeoutMillisecond: 10000, retryCount: 5)]
+[RemoteExecutionRule(timeoutMillisecond: 10000)]
 string GetData(int id);
 ```
 

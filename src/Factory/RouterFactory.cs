@@ -1,6 +1,8 @@
 using NetMQ;
 using NetMQ.Sockets;
 
+namespace ZeroRPC.NET.Factory;
+
 internal static class RouterFactory
 {
     internal static NetMQSocket CreateRouter(int port, string host = "*")
