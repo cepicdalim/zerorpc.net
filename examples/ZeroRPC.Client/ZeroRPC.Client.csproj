@@ -13,6 +13,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\src\ZeroRPC.NET.csproj" />
+    <ProjectReference Include="..\..\src\ZeroRPC.NET.csproj" />
   </ItemGroup>
 </Project>

@@ -20,7 +20,64 @@ namespace ZeroRPC.NET.Core;
 public class ZeroRpcClient<T> : DispatchProxy, IClient<T> where T : class
 {
     private static TimeSpan _defaultTimeout = TimeSpan.FromSeconds(15);
-    private static readonly ConcurrentDictionary<string, string> _clients = new();
+    private static readonly ConcurrentDictionary<string, string> _hosts = new();
+    private static readonly ConcurrentDictionary<string, RpcRequest> _requests = new();
+    private static readonly ConcurrentDictionary<string, NetMQSocket> _clients = [];
+
+
+    private static void Run(NetMQSocket client)
+    {
+        while (true)
+        {
+            var incomingMessage = client.ReceiveMultipartMessage();
+
+            var correlationId = incomingMessage[ClientFrameIndex.CorrelationId].ConvertToString();
+            if (_requests.TryRemove(correlationId, out var request))
+            {
+                if (incomingMessage.FrameCount <= ClientFrameIndex.Error)
+                {
+                    var response = incomingMessage[ClientFrameIndex.Response].ConvertToString();
+
+                    // Deserialize the response respect to Task<T> or Task
+
+                    if (request.ReturnType?.IsGenericType == true && request.ReturnType.GetGenericTypeDefinition() == typeof(Task<>))
+                    {
+                        var result = JsonSerializer.Deserialize(response, request.ReturnType.GetGenericArguments()[0]);
+                        request.TaskCompletionSource.SetResult(result);
+                    }
+                    else if (request.ReturnType == typeof(Task))
+                    {
+                        request.TaskCompletionSource.SetResult(Task.CompletedTask);
+                    }
+                    else if (request.ReturnType == typeof(void))
+                    {
+                        request.TaskCompletionSource.SetResult(null);
+                    }
+                    else
+                    {
+                        var result = JsonSerializer.Deserialize(response, request.ReturnType ?? typeof(void));
+                        request.TaskCompletionSource.SetResult(result);
+                    }
+                }
+                else
+                {
+                    var deserializedException = JsonSerializer.Deserialize<ZeroRpcException>(incomingMessage[ClientFrameIndex.Error].ConvertToString());
+                    request.TaskCompletionSource.SetException(deserializedException);
+                }
+
+            }
+        }
+    }
+
+    private void SendRequest(RpcRequest requests)
+    {
+        if (requests.Host == null)
+            throw new ArgumentException("Host cannot be null.");
+
+        _clients[requests.Host].SendRequest(requests);
+        _requests.TryAdd(requests.CorrelationId, requests);
+    }
+
 
     /// <summary>
     /// Configures the client by associating a type with a remote endpoint.
@@ -31,13 +88,23 @@ public class ZeroRpcClient<T> : DispatchProxy, IClient<T> where T : class
     public static void InitializeClient(Type target, string endpoint, TimeSpan defaultTimeout)
     {
         _defaultTimeout = defaultTimeout;
-        _clients[target.FullName] = endpoint;
+        AddClient(endpoint);
     }
+
+    private static void AddClient(string host)
+    {
+        if (!_clients.ContainsKey(host))
+            _clients[host] = DealerFactory.CreateDealer(host);
+
+        _hosts[typeof(T).FullName] = host;
+
+        new TaskFactory().StartNew(() => Run(_clients[host]), TaskCreationOptions.LongRunning);
+    }
+
 
     /// <inheritdoc />
     protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
     {
-        using var client = DealerFactory.CreateDealer(_clients[typeof(T).FullName]);
         if (targetMethod == null)
         {
             throw new ArgumentException("Target method cannot be null.");
@@ -46,55 +113,80 @@ public class ZeroRpcClient<T> : DispatchProxy, IClient<T> where T : class
         var rules = targetMethod.GetCustomAttribute<RemoteExecutionRule>();
         var rpcNamespace = GetRpcNamespace(targetMethod.DeclaringType);
         var fullPath = $"{rpcNamespace}.{targetMethod.Name}";
+
         var request =
-            new RpcRequest(fullPath,
-                SerializeArguments(args),
-                targetMethod.ReturnType,
-                rules?.Timeout ?? _defaultTimeout
-            );
+            new RpcRequest
+            {
+                FullPath = fullPath,
+                SerializedArgs = SerializeArguments(args),
+                ReturnType = targetMethod.ReturnType,
+                Timeout = rules?.Timeout ?? _defaultTimeout,
+                Host = _hosts[typeof(T).FullName],
+            };
 
-        client.SendRequest(request);
+        SendRequest(request);
 
-        if (targetMethod.ReturnType == typeof(void))
+        return HandleResponse(request);
+    }
+
+    private object? HandleResponse(RpcRequest request)
+    {
+        // Handle void methods
+        if (request.ReturnType == typeof(void))
         {
             return null;
         }
 
-        if (targetMethod.ReturnType == typeof(Task))
+        // Handle Task (non-generic async method)
+        if (request.ReturnType == typeof(Task))
         {
             return Task.CompletedTask;
         }
 
+        // Handle Task<T> (generic async method)
+        if (request.ReturnType?.IsGenericType == true && request.ReturnType.GetGenericTypeDefinition() == typeof(Task<>))
+        {
+            return GetTaskResult(request);
+        }
 
-        return HandleResponse(client, request);
+        // Handle synchronous methods
+        return request.TaskCompletionSource.Task.GetAwaiter().GetResult();
     }
 
-    private static object? HandleResponse(INetMQSocket client, RpcRequest request)
+    private object? GetTaskResult(RpcRequest request)
     {
-        while (true)
+        if (request.ReturnType == null) return null;
+
+        var genericType = request.ReturnType.GetGenericArguments()[0];
+
+        var originalTcs = request.TaskCompletionSource;
+
+        var newTcsType = typeof(TaskCompletionSource<>).MakeGenericType(genericType);
+        var newTcs = Activator.CreateInstance(newTcsType);
+
+        var taskProperty = newTcsType.GetProperty("Task");
+        var setResultMethod = newTcsType.GetMethod("SetResult");
+        var setExceptionMethod = newTcsType.GetMethod("SetException", [typeof(Exception)]);
+        var setCanceledMethod = newTcsType.GetMethod("SetCanceled", []);
+
+        var originalTask = originalTcs.Task;
+        originalTask.ContinueWith(task =>
         {
-            var incomingMessage = new NetMQMessage();
-            if (client.TryReceiveMultipartMessage(request.Timeout, ref incomingMessage))
+            if (task.IsFaulted)
             {
-                if (incomingMessage[ClientFrameIndex.CorrelationId].ConvertToString() != request.CorrelationId)
-                {
-                    continue;
-                }
-
-                if (incomingMessage.FrameCount <= ClientFrameIndex.Error)
-                {
-                    var response = incomingMessage[ClientFrameIndex.Response].ConvertToString();
-                    var result = JsonSerializer.Deserialize(response, request.ReturnType ?? typeof(void));
-                    return result;
-                }
-
-                var deserializedException = JsonSerializer.Deserialize<ZeroRpcException>(incomingMessage[ClientFrameIndex.Error].ConvertToString());
-                throw deserializedException ?? new ZeroRpcException();
+                setExceptionMethod?.Invoke(newTcs, [task.Exception!]);
             }
-
-            client.Dispose();
-            throw new ZeroRpcException($"Timout reached while waiting for response from {request.FullPath}");
-        }
+            else if (task.IsCanceled)
+            {
+                setCanceledMethod?.Invoke(newTcs, null);
+            }
+            else
+            {
+                var result = Convert.ChangeType(task.Result, genericType);
+                setResultMethod?.Invoke(newTcs, [result]);
+            }
+        });
+        return taskProperty?.GetValue(newTcs);
     }
 
     private static string GetRpcNamespace(MemberInfo? declaringType)
