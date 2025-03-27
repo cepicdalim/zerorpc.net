@@ -1,6 +1,8 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using ZeroRPC.Server;
 using ZeroRPC.NET.Common.Extensions;
+using ZeroRPC.NET.Common.Types.Configuration;
+using ZeroRPC.NET.Common.Constants;
 
 var services = new ServiceCollection();
 
@@ -12,4 +14,9 @@ services.AddZeroRpcServer();
 var serviceProvider = services.BuildServiceProvider();
 
 // Register the ZeroRPC services
-serviceProvider.RegisterZeroRpcServices(5556, new CancellationTokenSource().Token);
+serviceProvider.RegisterZeroRpcServices(new ConnectionConfiguration()
+{
+    Host = "*",
+    Port = 5556,
+    Protocol = ProtocolType.Tcp
+}, new CancellationTokenSource().Token);

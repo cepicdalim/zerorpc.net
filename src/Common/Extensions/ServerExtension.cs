@@ -1,9 +1,11 @@
 
-using System.Text.Json;
-using Microsoft.Extensions.DependencyInjection;
 using NetMQ;
-using ZeroRPC.NET.Common.Types.Exceptions;
+using System.Text.Json;
 using ZeroRPC.NET.Core;
+using ZeroRPC.NET.Common.Types.Exceptions;
+using Microsoft.Extensions.DependencyInjection;
+using ZeroRPC.NET.Common.Constants;
+using ZeroRPC.NET.Common.Types.Configuration;
 
 
 namespace ZeroRPC.NET.Common.Extensions;
@@ -27,13 +29,13 @@ public static class ServerExtensions
     /// Registers ZeroRPC services.
     /// </summary>
     /// <param name="serviceProvider"></param>
-    /// <param name="port"></param>
+    /// <param name="connectionConfiguration"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    public static IServiceProvider RegisterZeroRpcServices(this IServiceProvider serviceProvider, int port, CancellationToken cancellationToken = default)
+    public static IServiceProvider RegisterZeroRpcServices(this IServiceProvider serviceProvider, ConnectionConfiguration connectionConfiguration, CancellationToken cancellationToken = default)
     {
         var server = serviceProvider.GetRequiredService<ZeroRpcServer>();
-        server.RegisterServices(port, cancellationToken);
+        server.RegisterServices(connectionConfiguration, cancellationToken);
         return serviceProvider;
     }
 
@@ -50,7 +52,7 @@ public static class ServerExtensions
         message.Append(receiverIdentity);
         message.Append(correlationId);
         message.Append(payload);
-        server.SendMultipartMessage(message);
+        server.SendZeroRpcRequest(message);
     }
 
     /// <summary>
@@ -67,6 +69,6 @@ public static class ServerExtensions
         message.Append(correlationId);
         message.AppendEmptyFrame(); // Empty frame for payload
         message.Append(JsonSerializer.Serialize(error));
-        server.SendMultipartMessage(message);
+        server.SendZeroRpcRequest(message);
     }
 }

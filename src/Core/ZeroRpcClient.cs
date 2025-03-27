@@ -7,6 +7,7 @@ using ZeroRPC.NET.Common.Attributes;
 using ZeroRPC.NET.Common.Constants;
 using ZeroRPC.NET.Common.Extensions;
 using ZeroRPC.NET.Common.Types;
+using ZeroRPC.NET.Common.Types.Configuration;
 using ZeroRPC.NET.Common.Types.Dto;
 using ZeroRPC.NET.Common.Types.Exceptions;
 using ZeroRPC.NET.Factory;
@@ -19,8 +20,7 @@ namespace ZeroRPC.NET.Core;
 /// <typeparam name="T"></typeparam>
 public class ZeroRpcClient<T> : DispatchProxy, IClient<T> where T : class
 {
-    private static TimeSpan _defaultTimeout = TimeSpan.FromSeconds(15);
-    private static readonly ConcurrentDictionary<string, string> _hosts = new();
+    private static readonly ConcurrentDictionary<string, ClientConfiguration> _configurations = new();
     private static readonly ConcurrentDictionary<string, RpcRequest> _requests = new();
     private static readonly ConcurrentDictionary<string, NetMQSocket> _clients = [];
 
@@ -78,27 +78,21 @@ public class ZeroRpcClient<T> : DispatchProxy, IClient<T> where T : class
         _requests.TryAdd(requests.CorrelationId, requests);
     }
 
-
     /// <summary>
-    /// Configures the client by associating a type with a remote endpoint.
+    /// Initializes the client.
     /// </summary>
-    /// <param name="target">The target type to associate with the endpoint.</param>
-    /// <param name="endpoint">The remote endpoint URI.</param>
-    /// <param name="defaultTimeout"></param>
-    public static void InitializeClient(Type target, string endpoint, TimeSpan defaultTimeout)
+    /// <param name="clientConfiguration"></param>
+    /// <exception cref="ArgumentException"></exception>
+    /// <exception cref="ArgumentNullException"></exception>
+    public static void InitializeClient(ClientConfiguration clientConfiguration)
     {
-        _defaultTimeout = defaultTimeout;
-        AddClient(endpoint);
-    }
+        var connectionString = clientConfiguration.Connection.ToString();
+        if (!_clients.ContainsKey(connectionString))
+            _clients[connectionString] = DealerFactory.CreateDealer(clientConfiguration.Connection);
 
-    private static void AddClient(string host)
-    {
-        if (!_clients.ContainsKey(host))
-            _clients[host] = DealerFactory.CreateDealer(host);
+        _configurations[typeof(T).FullName] = clientConfiguration;
 
-        _hosts[typeof(T).FullName] = host;
-
-        new TaskFactory().StartNew(() => Run(_clients[host]), TaskCreationOptions.LongRunning);
+        new TaskFactory().StartNew(() => Run(_clients[connectionString]), TaskCreationOptions.LongRunning);
     }
 
 
@@ -120,8 +114,8 @@ public class ZeroRpcClient<T> : DispatchProxy, IClient<T> where T : class
                 FullPath = fullPath,
                 SerializedArgs = SerializeArguments(args),
                 ReturnType = targetMethod.ReturnType,
-                Timeout = rules?.Timeout ?? _defaultTimeout,
-                Host = _hosts[typeof(T).FullName],
+                Timeout = rules?.Timeout ?? _configurations[typeof(T).FullName].DefaultTimeout,
+                Host = _configurations[typeof(T).FullName].Connection.ToString(),
             };
 
         SendRequest(request);

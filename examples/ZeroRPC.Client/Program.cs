@@ -2,11 +2,20 @@
 using Microsoft.Extensions.DependencyInjection;
 using ZeroRPC.Client;
 using ZeroRPC.NET.Common.Extensions;
+using ZeroRPC.NET.Common.Types.Configuration;
 
 var services = new ServiceCollection();
 
 // Register example client
-services.AddZeroRpcClient<IExampleService>(port: 5556, defaultTimeout: TimeSpan.FromSeconds(15));
+services.AddZeroRpcClient<IExampleService>(new ClientConfiguration()
+{
+    Connection = new ConnectionConfiguration()
+    {
+        Host = "127.0.0.1",
+        Port = 5556
+    },
+    DefaultTimeout = TimeSpan.FromSeconds(15)
+});
 
 var serviceProvider = services.BuildServiceProvider();
 var remoteExampleService = serviceProvider.GetRequiredService<IExampleService>();

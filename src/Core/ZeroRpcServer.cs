@@ -10,6 +10,7 @@ using ZeroRPC.NET.Common.Types;
 using ZeroRPC.NET.Common.Types.Exceptions;
 using ZeroRPC.NET.Factory;
 using ZeroRPC.NET.Common.Extensions;
+using ZeroRPC.NET.Common.Types.Configuration;
 
 namespace ZeroRPC.NET.Core;
 
@@ -34,13 +35,13 @@ public class ZeroRpcServer : IServer
     /// <summary>
     /// Register services to be exposed via ZeroRPC.
     /// </summary>
-    /// <param name="port"></param>
+    /// <param name="connectionConfiguration"></param>
     /// <param name="cancellationToken"></param>
-    public void RegisterServices(int port, CancellationToken cancellationToken = default)
+    public void RegisterServices(ConnectionConfiguration connectionConfiguration, CancellationToken cancellationToken = default)
     {
         CollectRemoteServices();
         var runtime = new NetMQRuntime();
-        runtime.Run(cancellationToken, StartServer(port, cancellationToken));
+        runtime.Run(cancellationToken, StartServer(connectionConfiguration, cancellationToken));
     }
 
     private void CollectRemoteServices()
@@ -70,9 +71,9 @@ public class ZeroRpcServer : IServer
         }
     }
 
-    private async Task StartServer(int port, CancellationToken cancellationToken)
+    private async Task StartServer(ConnectionConfiguration connectionConfiguration, CancellationToken cancellationToken)
     {
-        var routerSocket = RouterFactory.CreateRouter(port);
+        var routerSocket = RouterFactory.CreateRouter(connectionConfiguration);
 
         while (!cancellationToken.IsCancellationRequested)
         {
