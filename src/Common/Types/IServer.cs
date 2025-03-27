@@ -1,3 +1,5 @@
+using ZeroRPC.NET.Common.Types.Configuration;
+
 namespace ZeroRPC.NET.Common.Types;
 
 /// <summary>
@@ -8,7 +10,7 @@ public interface IServer
     /// <summary>
     /// Register services to be exposed by the server.
     /// </summary>
-    /// <param name="port"></param>
+    /// <param name="connectionConfiguration"></param>
     /// <param name="cancellationToken"></param>
-    void RegisterServices(int port, CancellationToken cancellationToken);
+    void RunZeroRpcServer(ConnectionConfiguration connectionConfiguration, CancellationToken cancellationToken = default);
 }

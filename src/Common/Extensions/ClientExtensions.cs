@@ -1,8 +1,9 @@
-using System.Reflection;
-using Microsoft.Extensions.DependencyInjection;
 using NetMQ;
-using ZeroRPC.NET.Common.Types.Dto;
 using ZeroRPC.NET.Core;
+using System.Reflection;
+using ZeroRPC.NET.Common.Types.Dto;
+using ZeroRPC.NET.Common.Types.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ZeroRPC.NET.Common.Extensions;
 
@@ -15,21 +16,17 @@ public static class ClientExtensions
     /// Adds a ZeroRPC client to the service collection.
     /// </summary>
     /// <param name="services"></param>
-    /// <param name="port"></param>
-    /// <param name="defaultTimeout"></param>
-    /// <param name="host"></param>
+    /// <param name="clientConfiguration"></param>
     /// <typeparam name="TInterface"></typeparam>
     /// <returns></returns>
-    public static IServiceCollection AddZeroRpcClient<TInterface>(this IServiceCollection services, int port, TimeSpan? defaultTimeout = null, string host = "127.0.0.1")
+    public static IServiceCollection AddZeroRpcClient<TInterface>(this IServiceCollection services, ClientConfiguration clientConfiguration)
         where TInterface : class
     {
-        services.AddSingleton(provider =>
+        return services.AddSingleton(_ =>
         {
-            ZeroRpcClient<TInterface>.InitializeClient(typeof(TInterface), $"tcp://{host}:{port}", defaultTimeout ?? TimeSpan.FromSeconds(15));
+            ZeroRpcClient<TInterface>.InitializeClient(clientConfiguration);
             return DispatchProxy.Create<TInterface, ZeroRpcClient<TInterface>>();
         });
-
-        return services;
     }
 
     /// <summary>
@@ -39,11 +36,6 @@ public static class ClientExtensions
     /// <param name="request"></param>
     public static void SendRequest(this NetMQSocket client, RpcRequest request)
     {
-        if (request == null)
-        {
-            throw new ArgumentNullException(nameof(request));
-        }
-
         if (request.FullPath == null)
         {
             throw new ArgumentNullException(nameof(request.FullPath));
@@ -59,6 +51,6 @@ public static class ClientExtensions
         message.Append(request.FullPath);
         message.Append(request.SerializedArgs);
         message.Append(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + (request.Timeout.Ticks / 10_000));
-        client.SendMultipartMessage(message);
+        client.SendZeroRpcRequest(message);
     }
 }

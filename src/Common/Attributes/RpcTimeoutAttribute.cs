@@ -17,7 +17,7 @@ public class RemoteExecutionRule : Attribute
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the timeout is greater than or equal to <see cref="int.MaxValue"/>.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the timeout is less than or equal to zero.</exception>
     /// </summary>
-    protected RemoteExecutionRule(int timeoutMillisecond)
+    public RemoteExecutionRule(int timeoutMillisecond)
     {
         switch (timeoutMillisecond)
         {

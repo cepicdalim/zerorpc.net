@@ -74,11 +74,20 @@ Register the server and bind it to a port.
 
 ```csharp
 var services = new ServiceCollection();
+
+services.AddSingleton<IExampleService, ExampleService>();
+
+// Register ZeroRPC server to DI
 services.AddZeroRpcServer();
-services.AddSingleton<IMyService, MyService>();
 
 var serviceProvider = services.BuildServiceProvider();
-serviceProvider.RegisterZeroRpcServices(port: 5555);
+
+
+var server = serviceProvider.GetRequiredService<ZeroRpcServer>();
+var cancellationTokenSource = new CancellationTokenSource();
+server.RunZeroRpcServer(new ConnectionConfiguration("*", 5556), cancellationTokenSource.Token);
+Console.WriteLine("Server is running.");
+Console.ReadLine();
 ```
 
 ---
@@ -89,16 +98,22 @@ Register the client and connect to the server.
 
 ```csharp
 var services = new ServiceCollection();
-services.AddZeroRpcClient<IMyService>(port: 5555);
+
+// Register example client
+services.AddZeroRpcClient<IExampleService>(new ClientConfiguration()
+{
+    Connection = new ConnectionConfiguration("127.0.0.1", 5556, ProtocolType.Tcp),
+    DefaultTimeout = TimeSpan.FromSeconds(15)
+});
 
 var serviceProvider = services.BuildServiceProvider();
-var client = serviceProvider.GetRequiredService<IMyService>();
+var exampleService = serviceProvider.GetRequiredService<IExampleService>();
 
-// Call remote methods
-var data = client.GetData(42);
-Console.WriteLine(data);
+var simpleSync = exampleService.WaitAndReturn(0);
+Console.WriteLine($"Simple sync: {simpleSync}");
 
-client.SendMessage("Hello, server!");
+var simpleAsync = await exampleService.WaitAndReturnAsync(0);
+Console.WriteLine($"Simple async: {simpleAsync}");
 ```
 
 ---
@@ -166,6 +181,7 @@ client.SendMessage("Hello, server!");
 ## Example Project
 
 Run both ZeroRPC.Client and ZeroRPC.Server inside examples folder projects using:
+
 ```bash
 dotnet run
 ```
@@ -180,18 +196,21 @@ ZeroRPC uses the ZeroMQ Dealer-Router pattern for communication:
 4. **Serialization**: Arguments and responses are serialized using JSON.
 5. **Fire & Forget**: Do not wait for response for the methods that has return type of "void" or "Task"
 6. **Request TTL**: Server doesn't process incoming requests if the timeout reached (client not listening for respnose anymore)
+
 ---
 
 ## Benchmark (via BenchmarkDotNet v0.14.0)
+
 **Apple M1 Pro, 1 CPU, 10 logical and 10 physical cores**
 
-| **Method**                  | **Mean**      | **Error**    | **StdDev**    | **Median**    | **Gen0**   | **Allocated** |
-|------------------------ |----------:|---------:|----------:|----------:|-------:|----------:|
-| WaitAndReturn           | 302.21 us | 5.758 us | 13.906 us | 296.31 us | 0.4883 |    3.1 KB |
-| WaitAndReturnAsync      | 302.85 us | 6.002 us | 12.790 us | 297.97 us | 0.4883 |   3.86 KB |
-| MultipleParameter       | 305.07 us | 5.885 us | 11.888 us | 303.22 us | 0.4883 |    3.2 KB |
-| WaitAndReturnModelAsync | 300.77 us | 6.006 us |  8.614 us | 298.94 us | 0.4883 |      4 KB |
-| FireAndForgetAsync      |  77.88 us | 1.421 us |  1.187 us |  77.59 us | 0.2441 |   2.21 KB |
+| **Method**              |  **Mean** | **Error** | **StdDev** | **Median** | **Gen0** | **Allocated** |
+| ----------------------- | --------: | --------: | ---------: | ---------: | -------: | ------------: |
+| WaitAndReturn           | 302.21 us |  5.758 us |  13.906 us |  296.31 us |   0.4883 |        3.1 KB |
+| WaitAndReturnAsync      | 302.85 us |  6.002 us |  12.790 us |  297.97 us |   0.4883 |       3.86 KB |
+| MultipleParameter       | 305.07 us |  5.885 us |  11.888 us |  303.22 us |   0.4883 |        3.2 KB |
+| WaitAndReturnModelAsync | 300.77 us |  6.006 us |   8.614 us |  298.94 us |   0.4883 |          4 KB |
+| FireAndForgetAsync      |  77.88 us |  1.421 us |   1.187 us |   77.59 us |   0.2441 |       2.21 KB |
+
 Run time: 00:03:03 (183.33 sec), executed benchmarks: 5
 
 ## Contributing
@@ -221,6 +240,7 @@ Check out the example repository for a full implementation of ZeroRPC:
 ---
 
 ## Roadmap
+
 - Adding unit tests
 - Encapsulation for MQ library for further alternatives.
 - Add support for streaming RPC calls.
