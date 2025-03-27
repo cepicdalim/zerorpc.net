@@ -1,10 +1,11 @@
 using NetMQ;
-using ZeroRPC.NET.Common.Types.Exceptions;
+
+namespace ZeroRPC.NET.Common.Extensions;
 
 /// <summary>
 /// Extension methods for NetMQMessage.
 /// </summary>
-public static class NetMQMessageExtensions
+public static class NetMqMessageExtensions
 {
     /// <summary>
     /// Sends a ZeroRPC request using the specified NetMQSocket client.

@@ -37,11 +37,24 @@ public class ZeroRpcServer : IServer
     /// </summary>
     /// <param name="connectionConfiguration"></param>
     /// <param name="cancellationToken"></param>
-    public void RegisterServices(ConnectionConfiguration connectionConfiguration, CancellationToken cancellationToken = default)
+    public void RunZeroRpcServer(ConnectionConfiguration connectionConfiguration, CancellationToken cancellationToken = default)
     {
         CollectRemoteServices();
-        var runtime = new NetMQRuntime();
-        runtime.Run(cancellationToken, StartServer(connectionConfiguration, cancellationToken));
+        new TaskFactory().StartNew(() =>
+        {
+            try
+            {
+                StartServer(connectionConfiguration, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                Console.WriteLine("Server operation canceled.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Server error: {ex.Message}");
+            }
+        }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
     }
 
     private void CollectRemoteServices()
@@ -71,15 +84,18 @@ public class ZeroRpcServer : IServer
         }
     }
 
-    private async Task StartServer(ConnectionConfiguration connectionConfiguration, CancellationToken cancellationToken)
+    private void StartServer(ConnectionConfiguration connectionConfiguration, CancellationToken cancellationToken)
     {
         var routerSocket = RouterFactory.CreateRouter(connectionConfiguration);
+        var poller = new NetMQPoller { routerSocket };
+        routerSocket.ReceiveReady += OnResponseReceived;
+        poller.RunAsync();
+    }
 
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            var incomingMessage = await routerSocket.ReceiveMultipartMessageAsync(cancellationToken: cancellationToken);
-            _ = ProcessRequest(routerSocket, incomingMessage);
-        }
+    private void OnResponseReceived(object sender, NetMQSocketEventArgs e)
+    {
+        var incomingMessage = e.Socket.ReceiveMultipartMessage();
+        _ = ProcessRequest(e.Socket, incomingMessage);
     }
 
     private async Task ProcessRequest(NetMQSocket routerSocket, NetMQMessage incomingMessage)
@@ -89,7 +105,9 @@ public class ZeroRpcServer : IServer
         var method = incomingMessage[ServerFrameIndex.Payload].ConvertToString();
         var ttl = incomingMessage[ServerFrameIndex.Ttl].ConvertToInt64();
 
-        if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > ttl)
+        var timeout = TimeSpan.FromMilliseconds(ttl - DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+
+        if (timeout.TotalMilliseconds <= 0)
         {
             Console.WriteLine($"Request with CID: {correlationId} has timed out, ignored. TTL: {ttl}");
             return;
@@ -122,6 +140,7 @@ public class ZeroRpcServer : IServer
                     result = property?.GetValue(task);
                 }
             }
+
             routerSocket.SendOkResponse(correlationId, clientIdentity, JsonSerializer.Serialize(result));
         }
         catch (TargetInvocationException ex)
@@ -145,14 +164,17 @@ public class ZeroRpcServer : IServer
             throw new ZeroRpcException($"Parameter count mismatch for method '{methodInfo.Name}'.");
         }
 
-        return [.. args.Select((arg, index) =>
-        {
-            if (arg is JsonElement jsonElement)
+        return
+        [
+            .. args.Select((arg, index) =>
             {
-                return JsonSerializer.Deserialize(jsonElement.GetRawText(), parameterTypes[index]);
-            }
+                if (arg is JsonElement jsonElement)
+                {
+                    return JsonSerializer.Deserialize(jsonElement.GetRawText(), parameterTypes[index]);
+                }
 
-            return Convert.ChangeType(arg, parameterTypes[index]);
-        })];
+                return Convert.ChangeType(arg, parameterTypes[index]);
+            })
+        ];
     }
 }

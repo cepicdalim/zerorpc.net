@@ -1,65 +1,117 @@
 ﻿using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using ZeroRPC.Client;
+using ZeroRPC.NET.Common.Constants;
 using ZeroRPC.NET.Common.Extensions;
 using ZeroRPC.NET.Common.Types.Configuration;
+using ZeroRPC.NET.Common.Types.Exceptions;
 
-var services = new ServiceCollection();
-
-// Register example client
-services.AddZeroRpcClient<IExampleService>(new ClientConfiguration()
+class Program
 {
-    Connection = new ConnectionConfiguration()
+    static async Task Main()
     {
-        Host = "127.0.0.1",
-        Port = 5556
-    },
-    DefaultTimeout = TimeSpan.FromSeconds(15)
-});
 
-var serviceProvider = services.BuildServiceProvider();
-var remoteExampleService = serviceProvider.GetRequiredService<IExampleService>();
+        var services = new ServiceCollection();
 
-#region Basic Scenarios
+        services.AddZeroRpcClient<IExampleService>(new ClientConfiguration()
+        {
+            Connection = new ConnectionConfiguration("127.0.0.1", 5556, ProtocolType.Tcp),
+            DefaultTimeout = TimeSpan.FromSeconds(5)
+        });
 
-_ = remoteExampleService.FireAndForgetAsync(3);
+        var serviceProvider = services.BuildServiceProvider();
+        var remoteExampleService = serviceProvider.GetRequiredService<IExampleService>();
 
-var simpleSync = remoteExampleService.WaitAndReturn(0);
-Console.WriteLine($"Simple sync: {simpleSync}");
+        while (true)
+        {
+            Console.Clear();
+            Console.WriteLine("ZeroRPC Client - Interactive Menu");
+            Console.WriteLine("=====================================");
+            Console.WriteLine("1. Fire and Forget");
+            Console.WriteLine("2. Simple Sync Call");
+            Console.WriteLine("3. Simple Async Call");
+            Console.WriteLine("4. DTO Async Call");
+            Console.WriteLine("5. Multiple Parameter Call");
+            Console.WriteLine("6. Benchmark Async Calls");
+            Console.WriteLine("7. Benchmark Sync Calls");
+            Console.WriteLine("8. Timeout Example");
+            Console.Write("Select an option: ");
 
-var simpleAsync = await remoteExampleService.WaitAndReturnAsync(0);
-Console.WriteLine($"Simple async: {simpleAsync}");
+            var input = Console.ReadLine();
+            Console.Clear();
 
-var dtoAsync = await remoteExampleService.WaitAndReturnModelAsync(0);
-Console.WriteLine($"Dto async: {dtoAsync}");
+            switch (input)
+            {
+                case "1":
+                    Console.WriteLine("Executing Fire and Forget...");
+                    _ = remoteExampleService.FireAndForgetAsync(1);
+                    Console.WriteLine("[Done]");
+                    break;
+                case "2":
+                    Console.WriteLine("Executing Simple Sync Call...");
+                    Console.WriteLine($"Result: {remoteExampleService.WaitAndReturn(1)}");
+                    break;
+                case "3":
+                    Console.WriteLine("Executing Simple Async Call...");
+                    Console.WriteLine($"Result: {await remoteExampleService.WaitAndReturnAsync(1)}");
+                    break;
+                case "4":
+                    Console.WriteLine("Executing DTO Async Call...");
+                    Console.WriteLine($"Result: {await remoteExampleService.WaitAndReturnModelAsync(0)}");
+                    break;
+                case "5":
+                    Console.WriteLine("Executing Multiple Parameter Call...");
+                    Console.WriteLine($"Result: {remoteExampleService.MultipleParameter("Hello", "World")}");
+                    break;
+                case "6":
+                    await BenchmarkAsync(remoteExampleService);
+                    break;
+                case "7":
+                    BenchmarkSync(remoteExampleService);
+                    break;
+                case "8":
+                    Console.WriteLine("Executing Timeout Example...");
+                    try
+                    {
+                        _ = await remoteExampleService.WaitAndReturnAsync(3);
+                    }
+                    catch (ZeroRpcException ex)
+                    {
+                        Console.WriteLine($"Timeout Exception: {ex.Message}");
+                    }
+                    break;
+                default:
+                    Console.WriteLine("Invalid option. Please try again.");
+                    break;
+            }
+            Console.WriteLine("\nPress any key to continue...");
+            Console.ReadKey();
+        }
+    }
 
-string dataStr = remoteExampleService.MultipleParameter("Hello", "World");
-Console.WriteLine($"Multiple parameter: {dataStr}");
-#endregion
+    static async Task BenchmarkAsync(IExampleService service)
+    {
+        Console.WriteLine("Benchmarking Async Calls...");
+        var stopwatch = Stopwatch.StartNew();
+        var tasks = new List<Task>();
+        for (var i = 0; i < 3; i++)
+        {
+            tasks.Add(service.WaitAndReturnAsync(1));
+        }
+        await Task.WhenAll(tasks);
+        stopwatch.Stop();
+        Console.WriteLine($"Elapsed Time: {stopwatch.ElapsedMilliseconds} ms");
+    }
 
-#region Prof of async method
-var stopwatch = new Stopwatch();
-stopwatch.Start();
-var tasks = new List<Task>();
-for (int i = 0; i < 3; i++)
-{
-    tasks.Add(remoteExampleService.WaitAndReturnAsync(1));
+    static void BenchmarkSync(IExampleService service)
+    {
+        Console.WriteLine("Benchmarking Sync Calls...");
+        var stopwatch = Stopwatch.StartNew();
+        for (int i = 0; i < 3; i++)
+        {
+            service.WaitAndReturn(1);
+        }
+        stopwatch.Stop();
+        Console.WriteLine($"Elapsed Time: {stopwatch.ElapsedMilliseconds} ms");
+    }
 }
-await Task.WhenAll(tasks);
-stopwatch.Stop();
-
-// Should be approximately 1 seconds
-Console.WriteLine($"Elapsed time: {stopwatch.ElapsedMilliseconds} ms");
-#endregion
-
-#region Prof of sync method
-stopwatch.Restart();
-for (int i = 0; i < 3; i++)
-{
-    remoteExampleService.WaitAndReturn(1);
-}
-
-stopwatch.Stop();
-// Should be approximately 3 seconds
-Console.WriteLine($"Elapsed time: {stopwatch.ElapsedMilliseconds} ms");
-#endregion

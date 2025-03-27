@@ -18,5 +18,5 @@ public static class ConfigurationDefaults
     /// <summary>
     /// The default timeout for the client.
     /// </summary>
-    public static TimeSpan DefaultTimeout = TimeSpan.FromSeconds(15);
+    public static TimeSpan DefaultTimeout => TimeSpan.FromSeconds(15);
 }

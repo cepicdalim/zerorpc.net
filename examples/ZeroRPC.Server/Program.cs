@@ -2,21 +2,26 @@
 using ZeroRPC.Server;
 using ZeroRPC.NET.Common.Extensions;
 using ZeroRPC.NET.Common.Types.Configuration;
-using ZeroRPC.NET.Common.Constants;
+using ZeroRPC.NET.Core;
 
 var services = new ServiceCollection();
 
 services.AddSingleton<IExampleService, ExampleService>();
 
-// Initialize the ZeroRPC Router
+// Register ZeroRPC server to DI
 services.AddZeroRpcServer();
 
 var serviceProvider = services.BuildServiceProvider();
 
-// Register the ZeroRPC services
-serviceProvider.RegisterZeroRpcServices(new ConnectionConfiguration()
-{
-    Host = "*",
-    Port = 5556,
-    Protocol = ProtocolType.Tcp
-}, new CancellationTokenSource().Token);
+
+var server = serviceProvider.GetRequiredService<ZeroRpcServer>();
+var cancellationTokenSource = new CancellationTokenSource();
+server.RunZeroRpcServer(new ConnectionConfiguration("*", 5556), cancellationTokenSource.Token);
+
+Console.WriteLine("Server is running. Press any key to stop ZeroRPC Server.");
+Console.ReadLine();
+
+cancellationTokenSource.Cancel();
+
+Console.WriteLine("ZeroRPC Server stopped. Press any key to exit.");
+Console.ReadLine();

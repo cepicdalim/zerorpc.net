@@ -12,5 +12,5 @@ public interface IServer
     /// </summary>
     /// <param name="connectionConfiguration"></param>
     /// <param name="cancellationToken"></param>
-    void RegisterServices(ConnectionConfiguration connectionConfiguration, CancellationToken cancellationToken);
+    void RunZeroRpcServer(ConnectionConfiguration connectionConfiguration, CancellationToken cancellationToken = default);
 }

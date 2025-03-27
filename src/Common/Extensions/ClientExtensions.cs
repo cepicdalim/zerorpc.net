@@ -22,13 +22,11 @@ public static class ClientExtensions
     public static IServiceCollection AddZeroRpcClient<TInterface>(this IServiceCollection services, ClientConfiguration clientConfiguration)
         where TInterface : class
     {
-        services.AddSingleton(provider =>
+        return services.AddSingleton(_ =>
         {
             ZeroRpcClient<TInterface>.InitializeClient(clientConfiguration);
             return DispatchProxy.Create<TInterface, ZeroRpcClient<TInterface>>();
         });
-
-        return services;
     }
 
     /// <summary>
@@ -38,11 +36,6 @@ public static class ClientExtensions
     /// <param name="request"></param>
     public static void SendRequest(this NetMQSocket client, RpcRequest request)
     {
-        if (request == null)
-        {
-            throw new ArgumentNullException(nameof(request));
-        }
-
         if (request.FullPath == null)
         {
             throw new ArgumentNullException(nameof(request.FullPath));

@@ -1,14 +1,12 @@
-
 using NetMQ;
 using System.Text.Json;
 using ZeroRPC.NET.Core;
 using ZeroRPC.NET.Common.Types.Exceptions;
 using Microsoft.Extensions.DependencyInjection;
-using ZeroRPC.NET.Common.Constants;
-using ZeroRPC.NET.Common.Types.Configuration;
 
 
 namespace ZeroRPC.NET.Common.Extensions;
+
 /// <summary>
 /// Extension methods for the server.
 /// </summary>
@@ -23,20 +21,6 @@ public static class ServerExtensions
     {
         services.AddSingleton<ZeroRpcServer>();
         return services;
-    }
-
-    /// <summary>
-    /// Registers ZeroRPC services.
-    /// </summary>
-    /// <param name="serviceProvider"></param>
-    /// <param name="connectionConfiguration"></param>
-    /// <param name="cancellationToken"></param>
-    /// <returns></returns>
-    public static IServiceProvider RegisterZeroRpcServices(this IServiceProvider serviceProvider, ConnectionConfiguration connectionConfiguration, CancellationToken cancellationToken = default)
-    {
-        var server = serviceProvider.GetRequiredService<ZeroRpcServer>();
-        server.RegisterServices(connectionConfiguration, cancellationToken);
-        return serviceProvider;
     }
 
     /// <summary>
