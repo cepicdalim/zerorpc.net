@@ -1,7 +1,10 @@
 // benchmark.cs
+
 using BenchmarkDotNet.Attributes;
 using Microsoft.Extensions.DependencyInjection;
+using ZeroRPC.NET.Common.Constants;
 using ZeroRPC.NET.Common.Extensions;
+using ZeroRPC.NET.Common.Types.Configuration;
 
 [assembly: BenchmarkCategory("ZeroRPC.NET")]
 
@@ -15,8 +18,11 @@ namespace ZeroRPC.Benchmark
         public Benchmark()
         {
             var services = new ServiceCollection();
-            services.AddSingleton<IExampleService, ExampleService>();
-            services.AddZeroRpcClient<IExampleService>(port: 5556, defaultTimeout: TimeSpan.FromSeconds(15));
+            services.AddZeroRpcClient<IExampleService>(new ClientConfiguration()
+            {
+                DefaultTimeout = TimeSpan.FromSeconds(10),
+                Connection = new ConnectionConfiguration("127.0.0.1", 5556, ProtocolType.Tcp)
+            });
             var serviceProvider = services.BuildServiceProvider();
             _exampleService = serviceProvider.GetRequiredService<IExampleService>();
         }
