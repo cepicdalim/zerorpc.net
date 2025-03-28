@@ -1,6 +1,6 @@
 # ZeroRPC for .NET
 
-ZeroRPC is a .NET library designed to enable seamless communication between multiple applications using the ZeroMQ Dealer-Router pattern. It provides an elegant, attribute-based approach to defining remote methods and namespaces, making it easy to invoke server-side methods directly from client applications via interfaces.
+ZeroRPC is a .NET standard library designed to enable seamless communication between multiple applications using the ZeroMQ Dealer-Router pattern. It provides an elegant, attribute-based approach to defining remote methods and namespaces, making it easy to invoke server-side methods directly from client applications via interfaces.
 
 This library offering lightweight, fast, and customizable Remote Procedure Call (RPC) functionality. With ZeroRPC, developers can focus on building distributed systems without worrying about the complexities of communication protocols.
 
@@ -13,6 +13,11 @@ This library offering lightweight, fast, and customizable Remote Procedure Call 
 - **Timeout Rules**: Configure timeout and retry logic for remote method calls.
 - **Seamless Integration**: Easily integrate with .NET dependency injection for both clients and servers.
 - **Task and Void Support**: Automatically handles return types, including `void` and `Task`.
+- **Async Operations**: Supports asynchronous method calls for non-blocking operations.
+- **Fire & Forget**: Send messages without waiting for a response.
+- **Exception Handling**: Propagates server-side exceptions back to the client.
+- **Serialization**: Uses JSON for serialization and deserialization of method arguments and responses.
+- **.NET Framework and .NET Core Support**: Compatible with both .NET Framework and .NET Core applications.
 
 ---
 
@@ -21,7 +26,7 @@ This library offering lightweight, fast, and customizable Remote Procedure Call 
 Install the library via NuGet:
 
 ```bash
-dotnet add package ZeroRPC
+dotnet add package ZeroRPC.NET
 ```
 
 ---
@@ -30,15 +35,27 @@ dotnet add package ZeroRPC
 
 ### 1. Define Remote Interfaces and Methods
 
-Use the `[RemoteService]` and `[RemoteMethod]` attributes to define your remote interfaces and methods.
+Use the `[RemoteService]`, `[RemoteMethod]` and `[RemoteExecutionRule]` attributes to define your remote interfaces and methods.
 
 ```csharp
+//Client Interface
 [RemoteService("IMyService","MyApp")]
 public interface IMyService
 {
-    [RemoteMethod("GetData")]
     [RemoteExecutionRule(timeoutMillisecond: 5000)]
-    string GetData(int id);
+    Task<string> GetDataAsync(int id);
+
+    void SendMessage(string message);
+}
+```
+
+```csharp
+//Server Interface
+namespace MyApp;
+public interface IMyService
+{
+    [RemoteMethod("GetDataAsync")]
+    Task<string> GetDataAsync(int id);
 
     [RemoteMethod("SendMessage")]
     void SendMessage(string message);
@@ -54,9 +71,9 @@ Implement the interface on the server side.
 ```csharp
 public class MyService : IMyService
 {
-    public string GetData(int id)
+    public Task<string> GetDataAsync(int id)
     {
-        return $"Data for ID: {id}";
+        return await find(id);
     }
 
     public void SendMessage(string message)
@@ -74,20 +91,16 @@ Register the server and bind it to a port.
 
 ```csharp
 var services = new ServiceCollection();
+var cancellationTokenSource = new CancellationTokenSource();
 
 services.AddSingleton<IExampleService, ExampleService>();
-
 // Register ZeroRPC server to DI
 services.AddZeroRpcServer();
 
 var serviceProvider = services.BuildServiceProvider();
-
-
 var server = serviceProvider.GetRequiredService<ZeroRpcServer>();
-var cancellationTokenSource = new CancellationTokenSource();
+
 server.RunZeroRpcServer(new ConnectionConfiguration("*", 5556), cancellationTokenSource.Token);
-Console.WriteLine("Server is running.");
-Console.ReadLine();
 ```
 
 ---
@@ -97,23 +110,11 @@ Console.ReadLine();
 Register the client and connect to the server.
 
 ```csharp
-var services = new ServiceCollection();
-
-// Register example client
 services.AddZeroRpcClient<IExampleService>(new ClientConfiguration()
 {
     Connection = new ConnectionConfiguration("127.0.0.1", 5556, ProtocolType.Tcp),
     DefaultTimeout = TimeSpan.FromSeconds(15)
 });
-
-var serviceProvider = services.BuildServiceProvider();
-var exampleService = serviceProvider.GetRequiredService<IExampleService>();
-
-var simpleSync = exampleService.WaitAndReturn(0);
-Console.WriteLine($"Simple sync: {simpleSync}");
-
-var simpleAsync = await exampleService.WaitAndReturnAsync(0);
-Console.WriteLine($"Simple async: {simpleAsync}");
 ```
 
 ---
@@ -126,7 +127,7 @@ Use `[RemoteExecutionRule]` to configure retries and timeouts for remote method 
 
 ```csharp
 [RemoteExecutionRule(timeoutMillisecond: 10000)]
-string GetData(int id);
+string GetDataAsync(int id);
 ```
 
 ---
@@ -138,7 +139,7 @@ ZeroRPC propagates server-side exceptions back to the client. You can handle exc
 ```csharp
 try
 {
-    var data = client.GetData(999);
+    var data = await client.GetDataAsync(999);
 }
 catch (ZeroRpcException ex)
 {
@@ -153,27 +154,32 @@ catch (ZeroRpcException ex)
 ### Server
 
 ```csharp
+
 var services = new ServiceCollection();
+
+services.AddSingleton<IExampleService, ExampleService>();
+
 services.AddZeroRpcServer();
-services.AddSingleton<IMyService, MyService>();
 
 var serviceProvider = services.BuildServiceProvider();
-serviceProvider.RegisterZeroRpcServices(port: 5555);
+
+var server = serviceProvider.GetRequiredService<ZeroRpcServer>();
+server.RunZeroRpcServer(new ConnectionConfiguration("*", 5556));
+
+Console.ReadLine();
 ```
 
 ### Client
 
 ```csharp
 var services = new ServiceCollection();
-services.AddZeroRpcClient<IMyService>(port: 5555);
+services.AddZeroRpcClient<IExampleService>(new ClientConfiguration());
 
 var serviceProvider = services.BuildServiceProvider();
 var client = serviceProvider.GetRequiredService<IMyService>();
 
-var data = client.GetData(42);
+var data = await client.GetDataAsync(42);
 Console.WriteLine(data);
-
-client.SendMessage("Hello, server!");
 ```
 
 ---
@@ -190,12 +196,16 @@ dotnet run
 
 ZeroRPC uses the ZeroMQ Dealer-Router pattern for communication:
 
-1. **Client**: Sends requests to the server using a `DealerSocket`.
-2. **Server**: Listens for incoming requests using a `RouterSocket`.
+1. **Client**: Sends requests to the server using a `DealerSocket` asynchronously.
+2. **Server**: Listens for incoming requests using a `RouterSocket` asynchronously.
 3. **Attributes**: Define namespaces, methods, and execution rules for remote calls.
 4. **Serialization**: Arguments and responses are serialized using JSON.
 5. **Fire & Forget**: Do not wait for response for the methods that has return type of "void" or "Task"
 6. **Request TTL**: Server doesn't process incoming requests if the timeout reached (client not listening for respnose anymore)
+7. **Exception Handling**: Server-side exceptions are propagated back to the client.
+8. **Dependency Injection**: ZeroRPC integrates with .NET's built-in dependency injection for easy service registration and resolution.
+9. **Asynchronous**: All methods are asynchronous by default, allowing for non-blocking operations.
+10. **Multiple Protocols**: Support for multiple protocols (TCP, IPC, etc.) in the same application.
 
 ---
 
@@ -241,8 +251,7 @@ Check out the example repository for a full implementation of ZeroRPC:
 
 ## Roadmap
 
-- Adding unit tests
-- Encapsulation for MQ library for further alternatives.
+- Adding more and more unit tests. 
 - Add support for streaming RPC calls.
 - Improve error handling and logging.
 - Optimize serialization/deserialization performance.
